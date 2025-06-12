@@ -1,0 +1,119 @@
+name: Dokploy Deploy
+description: Trigger a deployment on Dokploy, either for an application or a compose project.
+branding:
+  icon: upload-cloud
+  color: gray-dark
+inputs:
+  dokploy_url:
+    description: Dokploy base URL, e.g. https://dokploy.example.com
+    required: true
+  api_key:
+    description: Dokploy API key.
+    required: true
+  type:
+    description: Dokploy deployment type. Valid values – `application`, `compose`.
+    default: application
+  compose_id:
+    description: Dokploy compose ID. If not provided, it will be fetched from Dokploy based on `project_name` and `app_name`.
+    default: ""
+  application_id:
+    description: Dokploy application ID. If not provided, it will be fetched from Dokploy based on `project_name` and `app_name`.
+    default: ""
+  project_name:
+    description: Dokploy project name, if `compose_id` or `application_id` is not provided, it will be used to get from dokploy.
+  app_name:
+    description: Dokploy app name (within your Dokploy project), if `compose_id` or `application_id` is not provided, it will be used to get from dokploy.
+runs:
+  using: composite
+  steps:
+    - name: Get Application ID
+      id: get-application-id
+      if: ${{ inputs.type == 'application' && inputs.application_id == '' }}
+      shell: bash
+      env:
+        DOKPLOY_URL: ${{ inputs.dokploy_url }}
+        DOKPLOY_API_KEY: ${{ inputs.api_key }}
+        DOKPLOY_PROJECT_NAME: ${{ inputs.project_name }}
+        DOKPLOY_APP_NAME: ${{ inputs.app_name }}
+      run: |
+        PROJECT_LIST=$(curl -X 'GET' \
+          "$DOKPLOY_URL/api/project.all" \
+          -H 'Accept: application/json' \
+          -H "X-API-Key: $DOKPLOY_API_KEY")
+
+        APPLICATION_ID=$(echo "$PROJECT_LIST" | jq -r '.[]
+          | select(.name == "$DOKPLOY_PROJECT_NAME")
+          | .applications[]
+          | select(.name == "$DOKPLOY_APP_NAME")
+          | .applicationId')
+
+        echo "application_id=$APPLICATION_ID" >> $GITHUB_ENV
+
+    - name: Get Compose ID
+      id: get-compose-id
+      if: ${{ inputs.type == 'compose' && inputs.compose_id == '' }}
+      shell: bash
+      env:
+        DOKPLOY_URL: ${{ inputs.dokploy_url }}
+        DOKPLOY_API_KEY: ${{ inputs.api_key }}
+        DOKPLOY_PROJECT_NAME: ${{ inputs.project_name }}
+        DOKPLOY_APP_NAME: ${{ inputs.app_name }}
+      run: |
+        PROJECT_LIST=$(curl -X 'GET' \
+          "$DOKPLOY_URL/api/project.all" \
+          -H 'Accept: application/json' \
+          -H "X-API-Key: $DOKPLOY_API_KEY")
+
+        COMPOSE_ID=$(echo "$PROJECT_LIST" | jq -r '.[]
+          | select(.name == "$DOKPLOY_PROJECT_NAME")
+          | .compose[]
+          | select(.name == "$DOKPLOY_APP_NAME")
+          | .composeId')
+
+        echo "compose_id=$COMPOSE_ID" >> $GITHUB_ENV
+
+    - name: Deploy Application
+      if: ${{ inputs.type == 'application' }}
+      shell: bash
+      env:
+        DOKPLOY_URL: ${{ inputs.dokploy_url }}
+        DOKPLOY_API_KEY: ${{ inputs.api_key }}
+        DOKPLOY_APPLICATION_ID: ${{ inputs.application_id || steps.get-application-id.outputs.application_id }}
+      run: |
+        response=$(curl -X 'POST' \
+          "$DOKPLOY_URL/api/application.deploy" \
+          -H 'Accept: application/json' \
+          -H 'Content-Type: application/json' \
+          -H "X-API-Key: $DOKPLOY_API_KEY" \
+          -d "{\"applicationId\": \"$DOKPLOY_APPLICATION_ID\"}" \
+          -w "%{http_code}" \
+          -o /dev/null \
+          -s)
+
+        if [ "$response" -ne 200 ]; then
+          echo "Deployment failed with status code: $response"
+          exit 1
+        fi
+
+    - name: Deploy Compose
+      if: ${{ inputs.type == 'compose' }}
+      shell: bash
+      env:
+        DOKPLOY_URL: ${{ inputs.dokploy_url }}
+        DOKPLOY_API_KEY: ${{ inputs.api_key }}
+        DOKPLOY_COMPOSE_ID: ${{ inputs.compose_id || steps.get-compose-id.outputs.compose_id }}
+      run: |
+        response=$(curl -X 'POST' \
+          "$DOKPLOY_URL/api/compose.deploy" \
+          -H 'Accept: application/json' \
+          -H 'Content-Type: application/json' \
+          -H "X-API-Key: $DOKPLOY_API_KEY" \
+          -d "{\"composeId\": \"$DOKPLOY_COMPOSE_ID\"}" \
+          -w "%{http_code}" \
+          -o /dev/null \
+          -s)
+
+        if [ "$response" -ne 200 ]; then
+          echo "Deployment failed with status code: $response"
+          exit 1
+        fi
