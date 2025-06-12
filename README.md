@@ -39,8 +39,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
       - name: Deploy App to Dokploy
         uses: qbix-tech/dokploy-deploy-action@v1
         with:
@@ -63,8 +61,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
       - name: Deploy App to Dokploy
         uses: qbix-tech/dokploy-deploy-action@v1
         with:
@@ -88,8 +84,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
       - name: Deploy App to Dokploy
         uses: qbix-tech/dokploy-deploy-action@v1
         with:
@@ -111,8 +105,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
       - name: Deploy App to Dokploy
         uses: qbix-tech/dokploy-deploy-action@v1
         with:
